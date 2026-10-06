@@ -67,9 +67,11 @@ class themeTree{
         const int N = imgMatrix.rows();
         labMatrix.resize(N, 3);
 
-        auto inverseGamma=[](float c) -> float {
-            return (c<=0.04045f) ? (c/12.92f) : std::pow((c+0.055f)/1.055f, 2.4f);
-        };
+        float gammaLut[256];
+        for (int i = 0; i < 256; ++i) {
+        float c = i / 255.0f;
+        gammaLut[i] = (c <= 0.04045f) ? (c / 12.92f) : std::pow((c + 0.055f) / 1.055f, 2.4f);
+        }
 
         Eigen::Matrix3f rgbTxyzMat;
         rgbTxyzMat << 0.4124564f, 0.3575761f, 0.1804375f,
@@ -90,10 +92,14 @@ class themeTree{
 
         for (int i = 0; i < N; ++i) {
         // Step A: Linearize RGB channels
+        uint8_t r_byte = wallpaper.pixels[i * 3 + 0];
+        uint8_t g_byte = wallpaper.pixels[i * 3 + 1];
+        uint8_t b_byte = wallpaper.pixels[i * 3 + 2];
+
         Eigen::Vector3f linear_rgb(
-            inverseGamma(imgMatrix(i, 0)),
-            inverseGamma(imgMatrix(i, 1)),
-            inverseGamma(imgMatrix(i, 2))
+            gammaLut[r_byte],
+            gammaLut[g_byte],
+            gammaLut[b_byte]
         );
 
         // Step B: Linear RGB to XYZ
