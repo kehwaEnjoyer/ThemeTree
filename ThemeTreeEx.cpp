@@ -22,5 +22,13 @@ int main() {
 
     std::cout << "Top-Left Pixel RGB: (" << r << ", " << g << ", " << b << ")\n";
 
+    img.ConvertTmatrix();
+    std::cout << "Eigen Matrix Shape: " << img.imgMatrix.rows() << " x " << img.imgMatrix.cols() << "\n";
+    std::cout << "First Pixel Normalized RGB: " << img.imgMatrix.row(0) << "\n";
+
+    img.rgbTcielab();
+
+    std::cout << "\nCIELAB Matrix Shape: " << img.labMatrix.rows() << " x " << img.labMatrix.cols() << "\n";
+    std::cout << "First Pixel CIELAB (L*, a*, b*): " << img.labMatrix.row(0) << "\n";
     return 0;
 }
