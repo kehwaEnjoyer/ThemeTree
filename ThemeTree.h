@@ -130,75 +130,92 @@ public:
     }
 
     bool runKmeans(int K, int maxIters = 100, float tol = 1e-4f) {
-        const int N = labMatrix.rows();
-        const int channels = labMatrix.cols();
+    const int N = labMatrix.rows();
+    const int channels = labMatrix.cols();
 
-        Eigen::MatrixXf centroids(K, channels);
-        std::mt19937 rng(42);
-        std::uniform_int_distribution<int> dist(0, N - 1);
+    Eigen::MatrixXf centroids(K, channels);
+    std::mt19937 rng(42);
+    std::uniform_int_distribution<int> dist(0, N - 1);
+
+    for (int k = 0; k < K; ++k) {
+        centroids.row(k) = labMatrix.row(dist(rng));
+    }
+
+    this->result.labels.resize(N);
+
+    // 1. PRE-ALLOCATE THREAD-LOCAL BUFFERS OUTSIDE THE ITERATION LOOP
+    int max_threads = omp_get_max_threads();
+    std::vector<Eigen::MatrixXf> thread_centroids(max_threads, Eigen::MatrixXf::Zero(K, channels));
+    std::vector<Eigen::VectorXf> thread_counts(max_threads, Eigen::VectorXf::Zero(K));
+
+    for (int iter = 0; iter < maxIters; ++iter) {
+        // Reset thread-local accumulators (no heap allocations!)
+        for (int t = 0; t < max_threads; ++t) {
+            thread_centroids[t].setZero();
+            thread_counts[t].setZero();
+        }
+
+        // 2. FUSED PARALLEL PASS OVER ALL N PIXELS
+        #pragma omp parallel
+        {
+            int tid = omp_get_thread_num();
+
+            #pragma omp for schedule(static)
+            for (int i = 0; i < N; ++i) {
+                float L = labMatrix(i, 0);
+                float a = labMatrix(i, 1);
+                float b = labMatrix(i, 2);
+
+                float min_dist = std::numeric_limits<float>::max();
+                int best_k = 0;
+
+                // Fast scalar distance check in CPU registers (Auto-vectorized by -O3)
+                for (int k = 0; k < K; ++k) {
+                    float dL = L - centroids(k, 0);
+                    float da = a - centroids(k, 1);
+                    float db = b - centroids(k, 2);
+                    float dist = dL * dL + da * da + db * db;
+
+                    if (dist < min_dist) {
+                        min_dist = dist;
+                        best_k = k;
+                    }
+                }
+
+                // Assign label & accumulate directly into thread-local buffer
+                this->result.labels(i) = best_k;
+                thread_centroids[tid].row(best_k) += labMatrix.row(i);
+                thread_counts[tid](best_k) += 1.0f;
+            }
+        }
+
+        // 3. COMBINE THREAD RESULTS
+        Eigen::MatrixXf newCentroids = Eigen::MatrixXf::Zero(K, channels);
+        Eigen::VectorXf counts = Eigen::VectorXf::Zero(K);
+
+        for (int t = 0; t < max_threads; ++t) {
+            newCentroids += thread_centroids[t];
+            counts += thread_counts[t];
+        }
 
         for (int k = 0; k < K; ++k) {
-            centroids.row(k) = labMatrix.row(dist(rng));
-        }
-
-        Eigen::VectorXi labels(N);
-        Eigen::MatrixXf distances(N, K);
-
-        for (int iter = 0; iter < maxIters; ++iter) {
-            // 1. Distance matrix computation across centroids (Parallel)
-            #pragma omp parallel for schedule(static)
-            for (int k = 0; k < K; ++k) {
-                distances.col(k) = (labMatrix.rowwise() - centroids.row(k)).rowwise().squaredNorm();
-            }
-
-            // 2. Minimum distance assignment per pixel (Parallel)
-            #pragma omp parallel for schedule(static)
-            for (int i = 0; i < N; ++i) {
-                distances.row(i).minCoeff(&labels(i));
-            }
-
-            // 3. Thread-safe centroid update using local accumulator buffers to avoid data races
-            Eigen::MatrixXf newCentroids = Eigen::MatrixXf::Zero(K, channels);
-            Eigen::VectorXf counts = Eigen::VectorXf::Zero(K);
-
-            #pragma omp parallel
-            {
-                Eigen::MatrixXf localCentroids = Eigen::MatrixXf::Zero(K, channels);
-                Eigen::VectorXf localCounts = Eigen::VectorXf::Zero(K);
-
-                #pragma omp for schedule(static)
-                for (int i = 0; i < N; ++i) {
-                    int cluster = labels(i);
-                    localCentroids.row(cluster) += labMatrix.row(i);
-                    localCounts(cluster) += 1.0f;
-                }
-
-                #pragma omp critical
-                {
-                    newCentroids += localCentroids;
-                    counts += localCounts;
-                }
-            }
-
-            for (int k = 0; k < K; ++k) {
-                if (counts(k) > 0.0f) {
-                    newCentroids.row(k) /= counts(k);
-                } else {
-                    newCentroids.row(k) = labMatrix.row(dist(rng));
-                }
-            }
-
-            float shift = (newCentroids - centroids).squaredNorm();
-            centroids = newCentroids;
-
-            if (shift < tol) {
-                std::cout << "K-Means converged at iteration " << iter + 1 << "\n";
-                break;
+            if (counts(k) > 0.0f) {
+                newCentroids.row(k) /= counts(k);
+            } else {
+                newCentroids.row(k) = labMatrix.row(dist(rng));
             }
         }
 
-        this->result.centroids = centroids;
-        this->result.labels = labels;
-        return true;
+        float shift = (newCentroids - centroids).squaredNorm();
+        centroids = newCentroids;
+
+        if (shift < tol) {
+            std::cout << "K-Means converged at iteration " << iter + 1 << "\n";
+            break;
+        }
+    }
+
+    this->result.centroids = centroids;
+    return true;
     }
 };
