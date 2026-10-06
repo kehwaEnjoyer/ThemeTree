@@ -2,6 +2,7 @@
 #include <vector>
 #include <string>
 #include <Eigen/Dense>
+#include <random>
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
@@ -24,7 +25,13 @@ class themeTree{
         };
     };
 
+    struct KMeansResult {
+    Eigen::MatrixXf centroids; // (K x 3) Final mean CIELAB colors
+    Eigen::VectorXi labels;    // (N x 1) Cluster assignment ID [0, K-1] per pixel
+    };
+
     image wallpaper;
+    KMeansResult result;
     Eigen::MatrixXf imgMatrix;
     Eigen::MatrixXf labMatrix;
     themeTree(){
@@ -116,6 +123,63 @@ class themeTree{
 
     }
     return true;
+    }
+
+    bool runKmeans(int K, int maxIters= 100, float tol= 1e-4f){
+        const int N = labMatrix.rows();
+        const int channels = labMatrix.cols();
+
+        Eigen::MatrixXf centroids(K, channels);
+        std::mt19937 rng(42);
+        std::uniform_int_distribution<int> dist(0, N - 1);
+
+        for(int k=0 ; k<K; ++k){
+            centroids.row(k) = labMatrix.row(dist(rng));
+        }
+
+        Eigen::VectorXi labels(N);
+        Eigen::MatrixXf distances(N, K);
+
+        for (int iter = 0; iter < maxIters; ++iter) {
+        for (int k = 0; k < K; ++k) {
+            // Subtract centroid k from every pixel row, then compute squared norm
+            distances.col(k) = (labMatrix.rowwise() - centroids.row(k)).rowwise().squaredNorm();
+        }
+
+        // Find closest centroid index per pixel
+        for (int i = 0; i < N; ++i) {
+            distances.row(i).minCoeff(&labels(i));
+        }
+
+        Eigen::MatrixXf newCentroids = Eigen::MatrixXf::Zero(K, channels);
+        Eigen::VectorXf counts = Eigen::VectorXf::Zero(K);
+
+        for (int i = 0; i < N; ++i) {
+            int cluster = labels(i);
+            newCentroids.row(cluster) += labMatrix.row(i);
+            counts(cluster) += 1.0f;
+        }
+
+        for (int k = 0; k < K; ++k) {
+            if (counts(k) > 0.0f) {
+                newCentroids.row(k) /= counts(k);
+            } else {
+                // Re-initialize empty clusters to a random pixel row
+                newCentroids.row(k) = labMatrix.row(dist(rng));
+            }
+        }
+
+        float shift = (newCentroids - centroids).squaredNorm();
+        centroids = newCentroids;
+
+        if (shift < tol) {
+            std::cout << "K-Means converged at iteration " << iter + 1 << "\n";
+            break;
+        }
+    }
+    this->result.centroids=centroids;
+    this->result.labels=labels;
+    return 1;
     }
 };
 

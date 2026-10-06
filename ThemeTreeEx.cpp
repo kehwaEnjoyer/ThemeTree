@@ -3,7 +3,7 @@
 
 int main() {
     themeTree img;
-    img.loadImage("test.png");
+    img.loadImage("test1.png");
 
     if (img.wallpaper.pixels.empty()) {
         return 1;
@@ -30,5 +30,10 @@ int main() {
 
     std::cout << "\nCIELAB Matrix Shape: " << img.labMatrix.rows() << " x " << img.labMatrix.cols() << "\n";
     std::cout << "First Pixel CIELAB (L*, a*, b*): " << img.labMatrix.row(0) << "\n";
+
+    int K=3;
+    img.runKmeans(K,100);
+    std::cout << "Clustered " << img.wallpaper.width * img.wallpaper.height << " pixels into " << K << " color centroids.\n";
+    std::cout << "Final Centroids (CIELAB space):\n" << img.result.centroids << "\n";
     return 0;
 }
