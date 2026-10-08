@@ -36,6 +36,7 @@ public:
     struct KMeansResult {
         Eigen::MatrixXf centroids; // (K x 3) Final mean CIELAB colors
         Eigen::VectorXi labels;    // (N x 1) Cluster assignment ID [0, K-1] per pixel
+        Eigen::VectorXf counts;
     };
 
     struct ColorRGB {
@@ -153,6 +154,8 @@ public:
     }
 
     this->result.labels.resize(N);
+    this->result.counts.resize(K);
+    Eigen::VectorXf finalCounts = Eigen::VectorXf::Zero(K);
 
     // 1. PRE-ALLOCATE THREAD-LOCAL BUFFERS OUTSIDE THE ITERATION LOOP
     int max_threads = omp_get_max_threads();
@@ -219,6 +222,7 @@ public:
 
         float shift = (newCentroids - centroids).squaredNorm();
         centroids = newCentroids;
+        finalCounts= counts;
 
         if (shift < tol) {
             std::cout << "K-Means converged at iteration " << iter + 1 << "\n";
@@ -227,6 +231,22 @@ public:
     }
 
     this->result.centroids = centroids;
+
+    /*for(int j=0; j<K; j++) {
+    for(int i=j; i<K-1;i++){
+        carry= finalCounts(i);
+        if(finalCounts(i)<finalCounts(i+1)){
+            std::cout<<"\n"<<"Swap"<<"\n";
+            finalCounts(i)=finalCounts(i+1);
+            finalCounts(i+1)=carry;
+        }
+    }
+    }*/
+   std::sort(finalCounts.data(),finalCounts.data()+finalCounts.size(), std::greater<float>());
+    for(int i=0;i<K;i++){
+        std::cout<<"\n"<<finalCounts(i)<<"\n";
+    }
+    this->result.counts= finalCounts;
     return true;
     }
 
