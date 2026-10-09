@@ -231,23 +231,39 @@ public:
     }
 
     this->result.centroids = centroids;
-
-    /*for(int j=0; j<K; j++) {
-    for(int i=j; i<K-1;i++){
-        carry= finalCounts(i);
-        if(finalCounts(i)<finalCounts(i+1)){
-            std::cout<<"\n"<<"Swap"<<"\n";
-            finalCounts(i)=finalCounts(i+1);
-            finalCounts(i+1)=carry;
-        }
-    }
-    }*/
-   std::sort(finalCounts.data(),finalCounts.data()+finalCounts.size(), std::greater<float>());
-    for(int i=0;i<K;i++){
-        std::cout<<"\n"<<finalCounts(i)<<"\n";
-    }
     this->result.counts= finalCounts;
+    sortResultByDominance();
     return true;
+    }
+
+    void sortResultByDominance() {
+    int K = this->result.centroids.rows();
+    if (K == 0 || this->result.counts.size() != K) {
+        std::cerr << "Cannot sort: result centroids or counts are empty.\n";
+        return;
+    }
+
+    struct ClusterPair {
+        Eigen::Vector3f color;
+        float count;
+    };
+
+    std::vector<ClusterPair> pairs(K);
+    for (int k = 0; k < K; ++k) {
+        pairs[k].color = this->result.centroids.row(k);
+        pairs[k].count = this->result.counts(k);
+    }
+
+    // Sort descending (highest pixel count first)
+    std::sort(pairs.begin(), pairs.end(), [](const ClusterPair& a, const ClusterPair& b) {
+        return a.count > b.count;
+    });
+
+    // Re-populate result.centroids and result.counts in sorted order
+    for (int k = 0; k < K; ++k) {
+        this->result.centroids.row(k) = pairs[k].color;
+        this->result.counts(k)        = pairs[k].count;
+    }
     }
 
     ColorRGB labToRgb(float L, float a, float b) {
