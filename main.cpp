@@ -1,53 +1,90 @@
-// main.cpp
-#include "ThemeTree.h"
 #include <iostream>
-#include <chrono>
+#include <string>
+#include <algorithm>
+#include "ThemeTree.h"
+
+// Convert user string to enum mode
+themeTree::SortMode parseSortMode(std::string arg) {
+    std::transform(arg.begin(), arg.end(), arg.begin(), ::tolower);
+
+    if (arg == "hybrid")    return themeTree::SortMode::HYBRID;
+    if (arg == "dominance") return themeTree::SortMode::DOMINANCE;
+    if (arg == "lightness") return themeTree::SortMode::LIGHTNESS;
+    if (arg == "chroma")    return themeTree::SortMode::CHROMA;
+    if (arg == "hue")       return themeTree::SortMode::HUE;
+
+    std::cerr << "[!] Unknown sort mode '" << arg << "'. Defaulting to 'hybrid'.\n";
+    return themeTree::SortMode::HYBRID;
+}
+
+void printUsage(const char* progName) {
+    std::cout << "Usage: " << progName << " <image_path> <css_out> <json_out> [options]\n\n"
+              << "Options:\n"
+              << "  --sort=<mode>    Set palette sorting mode (Default: hybrid)\n"
+              << "                     hybrid    : Dark BG, bright text, spectrum accents\n"
+              << "                     dominance : Highest pixel count -> lowest\n"
+              << "                     lightness : Darkest (L* = 0) -> brightest (L* = 100)\n"
+              << "                     chroma    : Most vibrant (Max C*) -> muted\n"
+              << "                     hue       : Spectrum order (-180° to +180°)\n"
+              << "  -h, --help       Show this usage message\n";
+}
 
 int main(int argc, char* argv[]) {
+    // Check for help flag anywhere or minimum positional arguments
     if (argc < 4) {
-        std::cout << "Usage: " << argv[0] << " <input_image> <output_css> <output_json> [K_clusters]\n";
-        std::cout << "Example: " << argv[0] << " wallpaper.png palette.css palette.json 8\n";
+        printUsage(argv[0]);
         return 1;
     }
 
-    std::string inputPath = argv[1];
+    std::string imagePath = argv[1];
     std::string cssPath   = argv[2];
     std::string jsonPath  = argv[3];
-    int K = (argc >= 5) ? std::stoi(argv[4]) : 8;
 
+    themeTree::SortMode sortMode = themeTree::SortMode::HYBRID; // Default strategy
+
+    // Parse optional flags
+    for (int i = 4; i < argc; ++i) {
+        std::string arg = argv[i];
+
+        if (arg == "-h" || arg == "--help") {
+            printUsage(argv[0]);
+            return 0;
+        }
+
+        // Handles --sort=lightness syntax
+        if (arg.rfind("--sort=", 0) == 0) {
+            std::string modeStr = arg.substr(7);
+            sortMode = parseSortMode(modeStr);
+        }
+        // Handles --sort lightness syntax
+        else if (arg == "--sort" && i + 1 < argc) {
+            sortMode = parseSortMode(argv[++i]);
+        }
+    }
+
+    // Pipeline Execution
     themeTree engine;
 
-    auto t_start = std::chrono::high_resolution_clock::now();
-
-    // 1. Load image from disk
-    std::cout << "[1/5] Loading image: " << inputPath << "...\n";
-    if (!engine.loadImage(inputPath)) {
+    if (!engine.loadImage(imagePath)) {
+        std::cerr << "Failed to load image: " << imagePath << "\n";
         return 1;
     }
 
-    // 2. Convert raw uint8_t buffer to normalized RGB float matrix
-    std::cout << "[2/5] Building RGB matrix...\n";
     engine.ConvertTmatrix();
-
-    // 3. Convert RGB matrix to CIELAB space
-    std::cout << "[3/5] Converting RGB to CIELAB color space...\n";
     engine.rgbTcielab();
 
-    // 4. Run multi-threaded K-Means clustering
-    std::cout << "[4/5] Running K-Means clustering (K = " << K << ")...\n";
-    if (!engine.runKmeans(K)) {
-        std::cerr << "Error running K-Means.\n";
+    // Run K-Means (K = 8 clusters)
+    if (!engine.runKmeans(8, 100, 1e-4f)) {
+        std::cerr << "K-Means execution failed.\n";
         return 1;
     }
 
-    // 5. Convert centroids back to sRGB and write palette files
-    std::cout << "[5/5] Exporting palette files...\n";
-    engine.exportPalette(engine.result.centroids, cssPath, jsonPath);
+    // Apply selected sorting strategy
+    engine.sortResult(sortMode);
 
-    auto t_end = std::chrono::high_resolution_clock::now();
-    double total_ms = std::chrono::duration<double, std::milli>(t_end - t_start).count();
+    // Export colors
+    engine.exportPalette(engine.result.centroids,  cssPath, jsonPath);
 
-    std::cout << "Done! Palette exported successfully in " << total_ms << " ms.\n";
-
+    std::cout << "Successfully exported palette to " << cssPath << " and " << jsonPath << "\n";
     return 0;
 }
