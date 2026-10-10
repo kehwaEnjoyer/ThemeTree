@@ -25,7 +25,7 @@ fi
 
 # 2. Link shell scripts from scripts/
 ln -sf "${PROJECT_ROOT}/scripts/themeTreeDaemon.sh" "${BIN_DIR}/themetreedaemon"
-ln -sf "${PROJECT_ROOT}/scripts/set-theme.sh" "${BIN_DIR}/set-theme"
+ln -sf "${PROJECT_ROOT}/scripts/themeTree-set.sh" "${BIN_DIR}/themeTree-set"
 
 echo "==> Updating PATH in ${BASHRC}..."
 
@@ -39,4 +39,4 @@ fi
 echo "==> Setup complete!"
 echo "    - C++ Engine:  'themeTree'"
 echo "    - Daemon:      'themetreedaemon'"
-echo "    - Switcher:    'set-theme'"
+echo "    - Switcher:    'themeTree-set'"
