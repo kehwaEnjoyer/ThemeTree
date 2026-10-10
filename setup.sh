@@ -9,6 +9,7 @@ BASHRC="${HOME}/.bashrc"
 echo "==> Setting executable permissions..."
 chmod +x "${PROJECT_ROOT}/scripts/themeTreeDaemon.sh"
 chmod +x "${PROJECT_ROOT}/scripts/themeTree-set.sh"
+chmod +x "${PROJECT_ROOT}/scripts/themeTree-next.sh"
 if [[ -f "${PROJECT_ROOT}/bin/themeTree" ]]; then
     chmod +x "${PROJECT_ROOT}/bin/themeTree"
 fi
@@ -26,6 +27,7 @@ fi
 # 2. Link shell scripts from scripts/
 ln -sf "${PROJECT_ROOT}/scripts/themeTreeDaemon.sh" "${BIN_DIR}/themetreedaemon"
 ln -sf "${PROJECT_ROOT}/scripts/themeTree-set.sh" "${BIN_DIR}/themeTree-set"
+ln -sf "${PROJECT_ROOT}/scripts/themeTree-next.sh"   "${BIN_DIR}/themeTree-next"
 
 echo "==> Updating PATH in ${BASHRC}..."
 
