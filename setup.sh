@@ -8,7 +8,7 @@ BASHRC="${HOME}/.bashrc"
 
 echo "==> Setting executable permissions..."
 chmod +x "${PROJECT_ROOT}/scripts/themeTreeDaemon.sh"
-chmod +x "${PROJECT_ROOT}/scripts/set-theme.sh"
+chmod +x "${PROJECT_ROOT}/scripts/themeTree-set.sh"
 if [[ -f "${PROJECT_ROOT}/bin/themeTree" ]]; then
     chmod +x "${PROJECT_ROOT}/bin/themeTree"
 fi
